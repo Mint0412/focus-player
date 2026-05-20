@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Focus YouTube Player</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace" aria-labelledby="appTitle">
+        <header class="topbar">
+          <div class="brand-lockup">
+            <h1 id="appTitle">
+              <button id="homeButton" class="brand-button" type="button">Focus Player</button>
+            </h1>
+          </div>
+          <div class="topbar-actions">
+            <label class="theme-toggle" for="themeToggle">
+              <span>다크 모드</span>
+              <input id="themeToggle" type="checkbox" />
+              <span class="toggle-track" aria-hidden="true">
+                <span class="toggle-thumb"></span>
+              </span>
+            </label>
+            <div class="session-meter" aria-live="polite">
+              <span>세션</span>
+              <strong id="sessionTime">00:00</strong>
+            </div>
+          </div>
+        </header>
+
+        <section class="control-panel" aria-label="검색 설정">
+          <form id="urlForm" class="url-form">
+            <label for="videoUrlInput">영상 URL</label>
+            <div class="url-line">
+              <input id="videoUrlInput" type="text" autocomplete="off" inputmode="url" placeholder="유튜브 영상 URL 붙여넣기" />
+              <button id="urlPlayButton" type="submit">URL 재생</button>
+            </div>
+          </form>
+
+          <form id="searchForm" class="search-form">
+            <label for="queryInput">검색어</label>
+            <div class="search-line">
+              <input id="queryInput" type="search" autocomplete="off" placeholder="예: 수능 영어 문법" />
+              <button id="searchButton" type="submit">검색</button>
+            </div>
+
+            <fieldset class="duration-tabs" aria-label="영상 길이">
+              <label>
+                <input type="radio" name="duration" value="any" checked />
+                <span>전체</span>
+              </label>
+              <label>
+                <input type="radio" name="duration" value="under1" />
+                <span>1분 미만</span>
+              </label>
+              <label>
+                <input type="radio" name="duration" value="1to3" />
+                <span>1~3분</span>
+              </label>
+              <label>
+                <input type="radio" name="duration" value="4to10" />
+                <span>4~10분</span>
+              </label>
+              <label>
+                <input type="radio" name="duration" value="10to15" />
+                <span>10~15분</span>
+              </label>
+              <label>
+                <input type="radio" name="duration" value="over20" />
+                <span>20분 이상</span>
+              </label>
+            </fieldset>
+          </form>
+        </section>
+
+        <section class="player-stage" aria-label="재생 영역">
+          <div id="playerMount" class="player-mount">
+            <div class="empty-player">
+              <span class="play-mark" aria-hidden="true"></span>
+              <p>검색 결과에서 볼 영상을 하나 선택하세요.</p>
+            </div>
+          </div>
+          <div class="player-actions">
+            <button id="finishButton" class="secondary-button" type="button" disabled>시청 완료</button>
+          </div>
+        </section>
+
+        <section class="results-panel" aria-label="검색 결과">
+          <div class="results-heading">
+            <div>
+              <h2 id="resultsTitle">검색 결과</h2>
+              <span id="resultCount">0개</span>
+            </div>
+            <button id="clearResultsButton" class="ghost-button compact-button" type="button" disabled>
+              결과 지우기
+            </button>
+          </div>
+          <div id="statusMessage" class="status-message" role="status">
+            검색어를 입력하면 시작할 수 있습니다.
+          </div>
+          <div id="resultsList" class="results-list"></div>
+          <nav id="pagination" class="pagination" aria-label="검색 결과 페이지"></nav>
+        </section>
+      </section>
+      <footer class="site-footer">
+        <span>Since 2026 | All right <a href="/admin">reserved</a>.</span>
+      </footer>
+    </main>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
