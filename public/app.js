@@ -149,9 +149,22 @@ function toggleTheme() {
 
 function applyTheme(theme) {
   state.theme = theme;
+  document.documentElement.dataset.theme = theme;
   document.body.dataset.theme = theme;
+  document.documentElement.style.colorScheme = theme === "dark" ? "dark" : "only light";
+  document.body.style.colorScheme = theme === "dark" ? "dark" : "only light";
   els.themeToggle.checked = theme === "dark";
+  updateColorSchemeMeta(theme);
   localStorage.setItem(themeStorageKey, theme);
+}
+
+function updateColorSchemeMeta(theme) {
+  const colorScheme = theme === "dark" ? "dark" : "light";
+  document
+    .querySelectorAll('meta[name="color-scheme"], meta[name="supported-color-schemes"]')
+    .forEach((meta) => {
+      meta.setAttribute("content", colorScheme);
+    });
 }
 
 async function hydrateApiKey() {
