@@ -2,13 +2,12 @@ services:
   - type: web
     name: focus-player
     runtime: node
+    plan: free
     buildCommand: npm install
     startCommand: npm start
-    autoDeploy: true
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_ENV
         value: production
       - key: YOUTUBE_API_KEY
-        sync: false
-      - key: ADMIN_PASSWORD_HASH
         sync: false
