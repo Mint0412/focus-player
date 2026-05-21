@@ -2,7 +2,7 @@ const storageKey = "focus-youtube-player-api-key";
 const themeStorageKey = "focus-youtube-player-theme";
 const pageSize = {
   channels: 5,
-  videos: 10,
+  videos: 20,
   channelVideos: 10,
   channelPlaylists: 10,
   channelShorts: 10,
@@ -219,6 +219,7 @@ async function handleSearch(event) {
   els.searchButton.disabled = true;
   els.clearResultsButton.disabled = true;
   els.resultsTitle.textContent = "검색 결과";
+  stopPlaybackForSearch();
   setStatus("검색 중입니다.");
   clearResults();
 
@@ -233,7 +234,7 @@ async function handleSearch(event) {
 
     state.lastResults = { channels, videos };
     renderMixedResults({ channels, videos }, 1);
-    setStatus("영상은 바로 재생하고, 채널은 해당 채널 안의 콘텐츠만 봅니다.", "success");
+    setStatus("영상을 선택하면 플레이어 화면으로 전환됩니다. 채널은 해당 채널 안의 콘텐츠만 봅니다.", "success");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "검색 중 문제가 생겼습니다.", "error");
   } finally {
@@ -742,23 +743,123 @@ function shouldHideNamedChannelTitle(channelTitle, query) {
 }
 
 function renderMixedResults({ channels, videos }, pageNumber = state.search.currentPage) {
-  const nodes = [];
-  if (channels.length) {
-    nodes.push(createSectionLabel("채널"));
-    nodes.push(...channels.map(createChannelCard));
+  if (state.selectedVideo) {
+    renderWatchResults({ channels, videos }, pageNumber);
+    return;
   }
-  if (videos.length) {
-    nodes.push(createSectionLabel("영상"));
-    nodes.push(...videos.map(createVideoCard));
+
+  renderDiscoveryResults({ channels, videos }, pageNumber);
+}
+
+function renderDiscoveryResults({ channels, videos }, pageNumber = state.search.currentPage) {
+  const groupedVideos = groupSearchVideos(videos);
+  const nodes = [];
+
+  if (groupedVideos.lead.length) {
+    nodes.push(createSearchSection(
+      "가장 관련 높은 영상",
+      groupedVideos.lead.map((video) => createVideoCard(video, { variant: "lead" })),
+      "lead-video-list"
+    ));
+  }
+
+  if (groupedVideos.shorts.length) {
+    nodes.push(createShortsSection(groupedVideos.shorts));
+  }
+
+  if (channels.length) {
+    nodes.push(createSearchSection("채널", channels.map(createChannelCard), "channel-result-list"));
+  }
+
+  if (groupedVideos.more.length) {
+    nodes.push(createSearchSection(
+      groupedVideos.more.length ? "더 많은 영상" : "영상",
+      groupedVideos.more.map((video) => createVideoCard(video, { variant: "wide" })),
+      "more-video-list"
+    ));
+  }
+
+  if (!nodes.length && videos.length) {
+    nodes.push(createSearchSection(
+      "영상",
+      videos.map((video) => createVideoCard(video, { variant: "wide" })),
+      "more-video-list"
+    ));
   }
 
   els.resultsTitle.textContent = "검색 결과";
-  els.resultsList.replaceChildren(...nodes);
+  const layout = document.createElement("div");
+  layout.className = "search-results-layout";
+  layout.replaceChildren(...nodes);
+  els.resultsList.replaceChildren(layout);
   els.resultCount.textContent = `${pageNumber}페이지 · ${channels.length + videos.length}개`;
   state.search.currentPage = pageNumber;
   state.lastResults = { channels, videos };
   renderPagination();
   updateClearResultsState();
+}
+
+function renderWatchResults({ channels, videos }, pageNumber = state.search.currentPage) {
+  const nodes = [];
+  const currentVideoId = state.selectedVideo?.id || "";
+  const nextVideos = videos.filter((video) => video.id !== currentVideoId);
+
+  if (nextVideos.length) {
+    nodes.push(createSectionLabel("다른 검색 결과"));
+    nodes.push(...nextVideos.map((video) => createVideoCard(video, { variant: "compact" })));
+  }
+
+  if (channels.length) {
+    nodes.push(createSectionLabel("채널"));
+    nodes.push(...channels.map(createChannelCard));
+  }
+
+  els.resultsTitle.textContent = "관련 검색 결과";
+  els.resultsList.replaceChildren(...nodes);
+  els.resultCount.textContent = `${pageNumber}페이지 · ${nextVideos.length + channels.length}개`;
+  state.search.currentPage = pageNumber;
+  state.lastResults = { channels, videos };
+  renderPagination();
+  updateClearResultsState();
+}
+
+function groupSearchVideos(videos) {
+  const safeVideos = Array.isArray(videos) ? videos : [];
+  const leadPool = state.search.duration === "under1"
+    ? safeVideos
+    : safeVideos.filter((video) => !isSearchShortVideo(video));
+  const lead = (leadPool.length ? leadPool : safeVideos).slice(0, 3);
+  const leadIds = new Set(lead.map((video) => video.id));
+  const shorts = safeVideos.filter((video) => isSearchShortVideo(video) && !leadIds.has(video.id));
+  const shortIds = new Set(shorts.map((video) => video.id));
+  const more = safeVideos.filter((video) => !leadIds.has(video.id) && !shortIds.has(video.id));
+
+  return { lead, shorts, more };
+}
+
+function isSearchShortVideo(video) {
+  return isUnderOneMinuteVideo(video);
+}
+
+function createSearchSection(title, children, className = "") {
+  const section = document.createElement("section");
+  section.className = "search-result-section";
+
+  const heading = document.createElement("h3");
+  heading.className = "search-section-heading";
+  heading.textContent = title;
+
+  const list = document.createElement("div");
+  list.className = `search-section-list ${className}`.trim();
+  list.replaceChildren(...children);
+
+  section.append(heading, list);
+  return section;
+}
+
+function createShortsSection(videos) {
+  const cards = videos.map((video) => createVideoCard(video, { variant: "short" }));
+  return createSearchSection("짧은 영상", cards, "shorts-video-row");
 }
 
 function createSectionLabel(text) {
@@ -856,9 +957,14 @@ function getChannelPageCount() {
   return Math.max(1, estimatedPages);
 }
 
-function createVideoCard(video) {
+function createVideoCard(video, options = {}) {
+  const variant = typeof options === "object" && options ? options.variant || "" : "";
   const button = document.createElement("button");
-  button.className = "result-card video-card";
+  button.className = [
+    "result-card",
+    "video-card",
+    variant ? `is-${variant}-card` : ""
+  ].filter(Boolean).join(" ");
   button.type = "button";
   button.addEventListener("click", () => playVideo(video));
 
@@ -958,6 +1064,7 @@ function createPlaylistCard(playlist) {
 }
 
 function openChannel(channel) {
+  stopPlaybackForSearch();
   state.selectedChannel = channel;
   startChannelMode(channel, "videos");
 }
@@ -1647,6 +1754,9 @@ function playVideo(video) {
   state.selectedVideo = video;
   els.finishButton.disabled = false;
   document.body.classList.add("has-active-video");
+  if (state.search.active && !state.channelView.active) {
+    renderWatchResults(state.lastResults, state.search.currentPage);
+  }
   els.playerMount.replaceChildren();
 
   if (state.player?.destroy) {
@@ -1654,40 +1764,50 @@ function playVideo(video) {
   }
 
   if (window.YT?.Player) {
-    const mount = document.createElement("div");
-    mount.id = "youtubePlayer";
-    els.playerMount.append(mount);
-    state.player = new window.YT.Player("youtubePlayer", {
-      host: "https://www.youtube-nocookie.com",
-      videoId: video.id,
-      playerVars: {
-        autoplay: 1,
-        playsinline: 1,
-        rel: 0,
-        origin: window.location.origin
-      },
-      events: {
-        onReady(event) {
-          event.target.playVideo();
+    try {
+      const mount = document.createElement("div");
+      mount.id = "youtubePlayer";
+      els.playerMount.append(mount);
+      state.player = new window.YT.Player("youtubePlayer", {
+        host: "https://www.youtube-nocookie.com",
+        videoId: video.id,
+        playerVars: {
+          autoplay: 1,
+          playsinline: 1,
+          rel: 0,
+          origin: window.location.origin
         },
-        onStateChange(event) {
-          if (event.data === window.YT.PlayerState.ENDED) {
-            finishViewing();
+        events: {
+          onReady(event) {
+            event.target.playVideo();
+          },
+          onStateChange(event) {
+            if (event.data === window.YT.PlayerState.ENDED) {
+              finishViewing();
+            }
           }
         }
-      }
-    });
+      });
+    } catch {
+      state.player = null;
+      els.playerMount.replaceChildren();
+      mountFallbackPlayer(video);
+    }
   } else {
-    const iframe = document.createElement("iframe");
-    iframe.title = video.title;
-    iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
-    iframe.allowFullscreen = true;
-    iframe.src = `https://www.youtube-nocookie.com/embed/${video.id}?autoplay=1&rel=0&playsinline=1&origin=${encodeURIComponent(window.location.origin)}`;
-    els.playerMount.append(iframe);
+    mountFallbackPlayer(video);
   }
 
   setStatus(`선택한 영상: ${video.title}`, "success");
   scrollPlayerIntoViewOnMobile();
+}
+
+function mountFallbackPlayer(video) {
+  const iframe = document.createElement("iframe");
+  iframe.title = video.title;
+  iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+  iframe.allowFullscreen = true;
+  iframe.src = `https://www.youtube-nocookie.com/embed/${video.id}?autoplay=1&rel=0&playsinline=1&origin=${encodeURIComponent(window.location.origin)}`;
+  els.playerMount.append(iframe);
 }
 
 function finishViewing() {
@@ -1704,6 +1824,9 @@ function finishViewing() {
   document.body.classList.remove("has-active-video");
   els.finishButton.disabled = true;
   els.playerMount.replaceChildren(createEmptyPlayer("시청 완료"));
+  if (state.search.active && !state.channelView.active) {
+    renderMixedResults(state.lastResults, state.search.currentPage);
+  }
   setStatus(message, "success");
 }
 
@@ -1734,6 +1857,18 @@ function createEmptyPlayer(message) {
 
   wrapper.append(mark, text);
   return wrapper;
+}
+
+function stopPlaybackForSearch() {
+  if (state.player?.destroy) {
+    state.player.destroy();
+  }
+
+  state.player = null;
+  state.selectedVideo = null;
+  document.body.classList.remove("has-active-video");
+  els.finishButton.disabled = true;
+  els.playerMount.replaceChildren(createEmptyPlayer("검색 결과에서 볼 영상을 하나 선택하세요."));
 }
 
 function clearResults() {
